@@ -61,7 +61,6 @@ class SQLiteHelper():
     def execute_query(self, query, params=None):
         """Function for handling executing SQL queries. params will be None in almost all cases, added for some things
         planned for the future. """
-
         try:
             if params is not None:
                 self.cursor.execute(query, params)
@@ -75,6 +74,25 @@ class SQLiteHelper():
             self.conn.rollback()
             print(f'Exception occurred, rolled back any changes. Error: {e}')
             return []
+
+    def select_data(self, selection_items, selection_where=None):
+
+        query = f'SELECT {selection_items} FROM {self.db_name}'
+        if selection_where:
+            query += f' WHERE {selection_where}'
+        try:
+            data = self.execute_query(query)
+            self.conn.commit()
+            print(data)
+            if data:
+                return data
+            else:
+                return f'No data returned.'
+
+        except Exception as e:
+            self.conn.rollback()
+            print(f'Select failed, rolled back. Error: {e}')
+            return f'Select failed, rolled back. Error: {e}'
 
     def insert_data(self, query_columns, query_values):
         """Insert data into SQLite Database.
@@ -98,10 +116,12 @@ class SQLiteHelper():
             self.cursor.execute(query)
             self.conn.commit()
             print("Data inserted successfully.")
+            return "Data inserted successfully."
 
         except Exception as e:
             self.conn.rollback()
             print(f'Insertion failed, rolled back. Error: {e}')
+            return f'Insertion failed, rolled back. Error: {e}'
 
     def delete_data(self, delete_from_column, value_to_delete):
         """Used for deleting data from the table associated with the SQLite file."""
@@ -111,10 +131,12 @@ class SQLiteHelper():
             self.cursor.execute(query)
             self.conn.commit()
             print("Data deleted successfully.")
+            return "Data deleted successfully"
 
         except Exception as e:
             self.conn.rollback()
             print(f'Deletion failed, rolled back. Error: {e}')
+            return f'Deletion failed, rolled back. Error: {e}'
 
     def update_data(self, update_data_dictionaries, where_clause):
         """Update SQLite DB data. Takes a list of dictionaries.
@@ -142,14 +164,27 @@ class SQLiteHelper():
             self.cursor.execute(query)
             self.conn.commit()
             print("Data updated successfully.")
+            return "Data updated successfully."
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Deletion failed, rolled back. Error: {e}')
+            print(f'Update failed, rolled back. Error: {e}')
+            return f'Update failed, rolled back. Error: {e}'
 
 
 if __name__ == "__main__":
-    table = SQLiteHelper('tableconfig.ini', 'testtable')
+    ...
+    # Example instantiation of the SQLiteHelper class. Creates DB files/table if they don't exist
+    # table = SQLiteHelper('tableconfig.ini', 'testtable')
 
-    table.insert_data(query_columns=('Name', 'age'), query_values=('test', 1))
-    table.update_data([{'age': 2}], 'age=1')
+    # Example of data insertion
+    # table.insert_data(query_columns=('Name', 'age'), query_values=('tester', 3))
+
+    # Example of data deletion
+    # table.delete_data('age', '3')
+
+    # Example of updating data
+    # table.update_data([{'name':'testing'}], 'age=2')
+
+    # Example of selection data
+    # table.select_data('name, age')
