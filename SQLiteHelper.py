@@ -1,7 +1,17 @@
 import sqlite3
-import pydantic
-from pydantic import BaseModel
 from configparser import ConfigParser
+import logging
+
+""" 
+In order to instantiate the SQLiteHelper class, you need an ini file denoting the table name and structure. 
+
+Example: 
+[TABLENAMEHERE]
+*name=TEXT # * denotes the field as part of the primary key of the DB
+age=TEXT
+height=REAL
+
+"""
 
 
 def load_config(filename, section):
@@ -24,10 +34,10 @@ def parse_table_config(input_config):
     return return_list
 
 
-class SQLiteHelper():
+class SQLiteHelper:
 
     def __init__(self, db_file, db_name):
-        self.__config= load_config(db_file, db_name)
+        self.__config = load_config(db_file, db_name)
         self.__config_list = parse_table_config(self.__config)
         self.__establish_db_conn(db_name)
         self.db_name = db_name
@@ -49,7 +59,7 @@ class SQLiteHelper():
             self.cursor.execute(execute_command)
 
         except sqlite3.OperationalError as se:
-            print(f'Exception Occurred: {se}') #
+            logging.error(f'Exception Occurred: {se}')
 
     def __establish_db_conn(self, db_name):
         """Handle creating the SQLite file/open the existing one."""
@@ -72,10 +82,14 @@ class SQLiteHelper():
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Exception occurred, rolled back any changes. Error: {e}')
+            logging.error(f'Exception occurred, rolled back any changes. Error: {e}')
             return []
 
     def select_data(self, selection_items, selection_where=None):
+        """Select command for retrieving information from the database. selection_items is the column name.
+        selection_where is the optional where clause. Example: selection_where age > 10 will filter results to rows
+        where age is greater than 10
+        """
 
         query = f'SELECT {selection_items} FROM {self.db_name}'
         if selection_where:
@@ -83,7 +97,7 @@ class SQLiteHelper():
         try:
             data = self.execute_query(query)
             self.conn.commit()
-            print(data)
+            logging.info(data)
             if data:
                 return data
             else:
@@ -91,7 +105,7 @@ class SQLiteHelper():
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Select failed, rolled back. Error: {e}')
+            logging.error(f'Select failed, rolled back. Error: {e}')
             return f'Select failed, rolled back. Error: {e}'
 
     def insert_data(self, query_columns, query_values):
@@ -115,12 +129,12 @@ class SQLiteHelper():
         try:
             self.cursor.execute(query)
             self.conn.commit()
-            print("Data inserted successfully.")
+            logging.info("Data inserted successfully.")
             return "Data inserted successfully."
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Insertion failed, rolled back. Error: {e}')
+            logging.error(f'Insertion failed, rolled back. Error: {e}')
             return f'Insertion failed, rolled back. Error: {e}'
 
     def delete_data(self, delete_from_column, value_to_delete):
@@ -128,14 +142,14 @@ class SQLiteHelper():
 
         query = f"DELETE FROM {self.db_name} WHERE {delete_from_column} = '{value_to_delete}'"
         try:
-            self.cursor.execute(query)
+            self.execute_query(query)
             self.conn.commit()
-            print("Data deleted successfully.")
+            logging.info("Data deleted successfully.")
             return "Data deleted successfully"
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Deletion failed, rolled back. Error: {e}')
+            logging.error(f'Deletion failed, rolled back. Error: {e}')
             return f'Deletion failed, rolled back. Error: {e}'
 
     def update_data(self, update_data_dictionaries, where_clause):
@@ -161,16 +175,66 @@ class SQLiteHelper():
 
         query = f"UPDATE {self.db_name} SET {set_clause} WHERE {where_clause}"
         try:
-            self.cursor.execute(query)
+            self.execute_query(query)
             self.conn.commit()
-            print("Data updated successfully.")
+            logging.info("Data updated successfully.")
             return "Data updated successfully."
 
         except Exception as e:
             self.conn.rollback()
-            print(f'Update failed, rolled back. Error: {e}')
+            logging.error(f'Update failed, rolled back. Error: {e}')
             return f'Update failed, rolled back. Error: {e}'
 
+    def select_min(self, column_name):
+        """Specialized Select command for retrieving information from the database. column_name is the column name.
+        This will return the minimum value of the rows based on the column name.
+         """
+
+        query = f"SELECT MIN({column_name} FROM {self.db_name}"
+        try:
+            data = self.execute_query(query)
+            self.conn.commit()
+            logging.info(f"Minimum from {column_name}: {data}.")
+            return f"Minimum from {column_name}: {data}."
+
+        except Exception as e:
+            self.conn.rollback()
+            logging.error(f'Selection failed, rolled back. Error: {e}')
+            return f'Selection failed, rolled back. Error: {e}'
+
+    def select_max(self, column_name):
+        """Specialized Select command for retrieving information from the database. column_name is the column name.
+        This will return the maximum value of the rows based on the column name.
+         """
+
+        query = f"SELECT MAX({column_name} FROM {self.db_name}"
+        try:
+            data = self.execute_query(query)
+            self.conn.commit()
+            logging.info(f"Maximum from {column_name}: {data}.")
+            return f"Maximum from {column_name}: {data}."
+
+        except Exception as e:
+            self.conn.rollback()
+            logging.error(f'Selection failed, rolled back. Error: {e}')
+            return f'Selection failed, rolled back. Error: {e}'
+
+    def select_avg(self, column_name):
+        """Specialized Select command for retrieving information from the database. column_name is the column name.\
+        This will return the average value of the rows based on the column name.
+         """
+
+        query = f"SELECT AVG({column_name} FROM {self.db_name}"
+        try:
+            data = self.execute_query(query)
+            self.conn.commit()
+            logging.info(f"Average from {column_name}: {data}.")
+            return f"Average from {column_name}: {data}."
+
+        except Exception as e:
+            self.conn.rollback()
+            logging.error(f'Selection failed, rolled back. Error: {e}')
+            return f'Selection failed, rolled back. Error: {e}'
 
 if __name__ == "__main__":
     ...
@@ -178,7 +242,7 @@ if __name__ == "__main__":
     # table = SQLiteHelper('tableconfig.ini', 'testtable')
 
     # Example of data insertion
-    # table.insert_data(query_columns=('Name', 'age'), query_values=('tester', 3))
+    # table.insert_data(query_columns=('name', 'age'), query_values=('tester', 3))
 
     # Example of data deletion
     # table.delete_data('age', '3')
