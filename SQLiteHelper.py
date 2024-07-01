@@ -27,13 +27,13 @@ def parse_table_config(input_config):
 class SQLiteHelper():
 
     def __init__(self, db_file, db_name):
-        self.__config__ = load_config(db_file, db_name)
-        self.__config_list__ = parse_table_config(self.__config__)
-        self.__establish_db_conn__(db_name)
+        self.__config= load_config(db_file, db_name)
+        self.__config_list = parse_table_config(self.__config)
+        self.__establish_db_conn(db_name)
         self.db_name = db_name
-        self.__create_table__(db_name, self.__config_list__)
+        self.__create_table(db_name, self.__config_list)
 
-    def __create_table__(self, table_name, table_layout):
+    def __create_table(self, table_name, table_layout):
         """Create SQLite db if it doesn't exist. """
 
         __command_string__ = f"""CREATE TABLE IF NOT EXISTS {table_name} ("""
@@ -51,7 +51,7 @@ class SQLiteHelper():
         except sqlite3.OperationalError as se:
             print(f'Exception Occurred: {se}') #
 
-    def __establish_db_conn__(self, db_name):
+    def __establish_db_conn(self, db_name):
         """Handle creating the SQLite file/open the existing one."""
 
         self.conn = sqlite3.connect(f'{db_name}.db')
