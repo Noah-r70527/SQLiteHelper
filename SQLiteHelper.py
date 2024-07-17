@@ -45,6 +45,9 @@ class SQLiteHelper:
 
     def __create_table(self, table_name, table_layout):
         """Create SQLite db if it doesn't exist. """
+        
+        table_name = self.db_name
+        table_layout = self.__config_list
 
         __command_string__ = f"""CREATE TABLE IF NOT EXISTS {table_name} ("""
         __primary_keys__ = 'PRIMARY KEY ('
@@ -52,12 +55,15 @@ class SQLiteHelper:
         for line in table_layout:
             __command_string__ += f'{line[0]}, '
             if line[1]:
-                __primary_keys__ += f"{line[0].split(' ')[0]}"
+                __primary_keys__ += f"{line[0].split(' ')[0]}, "
 
-        execute_command = f"""{__command_string__} {__primary_keys__}))"""
+        __command_string__ = __command_string__.rstrip(', ') + ')'
+        __primary_keys__ = __primary_keys__.rstrip(', ') + ')'
+
+        execute_command = f"""{__command_string__}, {__primary_keys__})"""
         try:
             self.cursor.execute(execute_command)
-
+            self.conn.commit()
         except sqlite3.OperationalError as se:
             logging.error(f'Exception Occurred: {se}')
 
@@ -137,16 +143,15 @@ class SQLiteHelper:
             logging.error(f'Insertion failed, rolled back. Error: {e}')
             return f'Insertion failed, rolled back. Error: {e}'
 
-    def delete_data(self, delete_from_column, value_to_delete):
+    def delete_data(self, column_name, value_to_delete):
         """Used for deleting data from the table associated with the SQLite file."""
 
-        query = f"DELETE FROM {self.db_name} WHERE {delete_from_column} = '{value_to_delete}'"
+        query = f"DELETE FROM {self.db_name} WHERE {column_name} = ?"
         try:
-            self.execute_query(query)
+            self.execute_query(query, (value_to_delete,))
             self.conn.commit()
             logging.info("Data deleted successfully.")
             return "Data deleted successfully"
-
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Deletion failed, rolled back. Error: {e}')
@@ -189,8 +194,8 @@ class SQLiteHelper:
         """Specialized Select command for retrieving information from the database. column_name is the column name.
         This will return the minimum value of the rows based on the column name.
          """
+        query = f"SELECT MIN({column_name}) FROM {self.db_name}"
 
-        query = f"SELECT MIN({column_name} FROM {self.db_name}"
         try:
             data = self.execute_query(query)
             self.conn.commit()
@@ -207,7 +212,7 @@ class SQLiteHelper:
         This will return the maximum value of the rows based on the column name.
          """
 
-        query = f"SELECT MAX({column_name} FROM {self.db_name}"
+        query = f"SELECT MAX({column_name}) FROM {self.db_name}"
         try:
             data = self.execute_query(query)
             self.conn.commit()
@@ -224,7 +229,7 @@ class SQLiteHelper:
         This will return the average value of the rows based on the column name.
          """
 
-        query = f"SELECT AVG({column_name} FROM {self.db_name}"
+        query = f"SELECT AVG({column_name}) FROM {self.db_name}"
         try:
             data = self.execute_query(query)
             self.conn.commit()
