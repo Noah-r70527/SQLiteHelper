@@ -246,10 +246,16 @@ class SQLiteHelper:
         """selection_items would be the columns you want to select from
            selection_where is the WHERE clause
            output_columns allows you to filter columns out
-           file_name allows you to use a custom file name, output.csv is default"""
+           file_name allows you to use a custom file name, output.csv is default
+        """
         
         if selection_items:
-            query = f'SELECT {selection_items} FROM {self.db_name} WHERE {selection_where}'
+
+            if selection_where:
+                query = f'SELECT {selection_items} FROM {self.db_name} WHERE {selection_where}'
+            else:
+                query = f'SELECT {selection_items} FROM {self.db_name}'
+
         else:
             query = f'SELECT * FROM {self.db_name}'
 
