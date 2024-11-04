@@ -1,6 +1,7 @@
 import sqlite3
 from configparser import ConfigParser
 import logging
+import csv
 
 """ 
 In order to instantiate the SQLiteHelper class, you need an ini file denoting the table name and structure. 
@@ -240,6 +241,31 @@ class SQLiteHelper:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
             return f'Selection failed, rolled back. Error: {e}'
+
+    def output_csv(self, selection_items=None, selection_where=None,output_rows=None, file_name=None):
+        if selection_items:
+            query = f'SELECT {selection_items} FROM {self.db_name} {selection_where}'
+        else:
+            query = f'SELECT * FROM {self.db_name}'
+
+        if file_name:
+            name = file_name
+        else:
+            name = 'output.csv'
+
+        if output_rows:
+            rows = output_rows
+        else:
+            rows = self.__config_list
+
+        with open(name, 'w', newline="") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=rows)
+            writer.writeheader()
+            writer.writerows(self.select_data(query))
+
+
+
+
 
 if __name__ == "__main__":
     ...
