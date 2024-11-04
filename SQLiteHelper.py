@@ -242,9 +242,14 @@ class SQLiteHelper:
             logging.error(f'Selection failed, rolled back. Error: {e}')
             return f'Selection failed, rolled back. Error: {e}'
 
-    def output_csv(self, selection_items=None, selection_where=None,output_rows=None, file_name=None):
+    def output_csv(self, selection_items=None, selection_where=None,output_columns=None, file_name=None):
+        """selection_items would be the columns you want to select from
+           selection_where is the WHERE clause
+           output_columns allows you to filter columns out
+           file_name allows you to use a custom file name, output.csv is default"""
+        
         if selection_items:
-            query = f'SELECT {selection_items} FROM {self.db_name} {selection_where}'
+            query = f'SELECT {selection_items} FROM {self.db_name} WHERE {selection_where}'
         else:
             query = f'SELECT * FROM {self.db_name}'
 
@@ -253,8 +258,8 @@ class SQLiteHelper:
         else:
             name = 'output.csv'
 
-        if output_rows:
-            rows = output_rows
+        if output_columns:
+            rows = output_columns
         else:
             rows = self.__config_list
 
@@ -262,9 +267,6 @@ class SQLiteHelper:
             writer = csv.DictWriter(csv_file, fieldnames=rows)
             writer.writeheader()
             writer.writerows(self.select_data(query))
-
-
-
 
 
 if __name__ == "__main__":
