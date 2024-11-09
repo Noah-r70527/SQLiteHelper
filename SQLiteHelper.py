@@ -1,7 +1,6 @@
 import sqlite3
 from configparser import ConfigParser
 import logging
-import csv
 
 """ 
 In order to instantiate the SQLiteHelper class, you need an ini file denoting the table name and structure. 
@@ -42,28 +41,32 @@ class SQLiteHelper:
         self.__config_list = parse_table_config(self.__config)
         self.__establish_db_conn(db_name)
         self.db_name = db_name
-        self.__create_table(db_name, self.__config_list)
+        self.__create_table()
 
-    def __create_table(self, table_name, table_layout):
+    def __create_table(self):
         """Create SQLite db if it doesn't exist. """
-        
+
         table_name = self.db_name
         table_layout = self.__config_list
 
         __command_string__ = f"""CREATE TABLE IF NOT EXISTS {table_name} ("""
-        __primary_keys__ = 'PRIMARY KEY ('
+        primary_key_fields = []
+
 
         for line in table_layout:
             __command_string__ += f'{line[0]}, '
-            if line[1]:
-                __primary_keys__ += f"{line[0].split(' ')[0]}, "
+            if line[1]:  
+                primary_key_fields.append(line[0].split(' ')[0])
 
-        __command_string__ = __command_string__.rstrip(', ') + ')'
-        __primary_keys__ = __primary_keys__.rstrip(', ') + ')'
+        if primary_key_fields:  
+            __command_string__ += f'PRIMARY KEY ({", ".join(primary_key_fields)})'
+        else:
+            __command_string__ = __command_string__.rstrip(', ')
 
-        execute_command = f"""{__command_string__}, {__primary_keys__})"""
+        __command_string__ += ')'  
+
         try:
-            self.cursor.execute(execute_command)
+            self.cursor.execute(__command_string__)
             self.conn.commit()
         except sqlite3.OperationalError as se:
             logging.error(f'Exception Occurred: {se}')
@@ -241,39 +244,6 @@ class SQLiteHelper:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
             return f'Selection failed, rolled back. Error: {e}'
-
-    def output_csv(self, selection_items=None, selection_where=None,output_columns=None, file_name=None):
-        """selection_items would be the columns you want to select from
-           selection_where is the WHERE clause
-           output_columns allows you to filter columns out
-           file_name allows you to use a custom file name, output.csv is default
-        """
-        
-        if selection_items:
-
-            if selection_where:
-                query = f'SELECT {selection_items} FROM {self.db_name} WHERE {selection_where}'
-            else:
-                query = f'SELECT {selection_items} FROM {self.db_name}'
-
-        else:
-            query = f'SELECT * FROM {self.db_name}'
-
-        if file_name:
-            name = file_name
-        else:
-            name = 'output.csv'
-
-        if output_columns:
-            rows = output_columns
-        else:
-            rows = self.__config_list
-
-        with open(name, 'w', newline="") as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=rows)
-            writer.writeheader()
-            writer.writerows(self.select_data(query))
-
 
 if __name__ == "__main__":
     ...
