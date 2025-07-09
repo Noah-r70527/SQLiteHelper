@@ -1,20 +1,26 @@
 import sqlite3
 from configparser import ConfigParser
 import logging
+import re
 
-""" 
-In order to instantiate the SQLiteHelper class, you need an ini file denoting the table name and structure. 
+"""
+This module provides a helper class for working with SQLite databases using a configuration file (.ini) 
+to define table schema and primary keys.
 
-Example: 
-[TABLENAMEHERE]
-*name=TEXT # * denotes the field as part of the primary key of the DB
-age=TEXT
-height=REAL
+Example INI format:
 
+    [example_table]
+    *id=INTEGER
+    name=TEXT
+    age=INTEGER
+
+An asterisk (*) denotes the column is part of the primary key.
 """
 
 
 def load_config(filename, section):
+    """Load the configuration section from an INI file."""
+
     parser = ConfigParser()
     parser.read(filename)
     config = {}
@@ -22,29 +28,47 @@ def load_config(filename, section):
         params = parser.items(section)
         for param in params:
             config[param[0]] = param[1]
+
+        return config
+
     else:
-        raise Exception(f'Section {section} not found in the {filename} file')
-    return config
+         raise Exception(f'Section {section} not found in the {filename} file')
 
 
 def parse_table_config(input_config):
+    """Parse the INI table structure into a list of (column_def, is_primary_key) tuples."""
     return_list = []
     for key, value in input_config.items():
         return_list.append((f'{key.replace("*", "")} {value}', key[0] == '*'))
     return return_list
 
 
+def sanitize_identifier(identifier):
+    """Helper function to assist with detecting SQL Injection."""
+
+    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', identifier):
+        raise ValueError(f"Invalid identifier: {identifier}")
+    return identifier
+
+
 class SQLiteHelper:
 
-    def __init__(self, db_file, db_name):
+    def __init__(self, db_file, db_name, enable_command_logging=False):
         self.__config = load_config(db_file, db_name)
         self.__config_list = parse_table_config(self.__config)
         self.__establish_db_conn(db_name)
         self.db_name = db_name
+        self.debug = enable_command_logging
         self.__create_table()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
     def __create_table(self):
-        """Create SQLite db if it doesn't exist. """
+        """Create the database table if it does not already exist."""
 
         table_name = self.db_name
         table_layout = self.__config_list
@@ -72,19 +96,39 @@ class SQLiteHelper:
             logging.error(f'Exception Occurred: {se}')
 
     def __establish_db_conn(self, db_name):
-        """Handle creating the SQLite file/open the existing one."""
+        """Establish a connection to the SQLite database."""
 
         self.conn = sqlite3.connect(f'{db_name}.db')
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
+    def close(self):
+        """Used to close connection to SQLite DB"""
+        if self.conn:
+            self.conn.close()
+
     def execute_query(self, query, params=None):
-        """Function for handling executing SQL queries. params will be None in almost all cases, added for some things
-        planned for the future. """
+        """
+        Execute a SQL query with optional parameters.
+
+        Args:
+            query (str): SQL query to execute.
+            params (tuple, optional): Values to bind to query placeholders.
+
+        Returns:
+            list[dict]: Query results as a list of dictionaries (rows), or an empty list on error.
+        """
+
         try:
             if params is not None:
+                logging.info(f'Attempting to execute:'
+                             f'Query - {query}'
+                             f'Params - {params}')
+
                 self.cursor.execute(query, params)
             else:
+                logging.info(f'Attempting to execute:'
+                             f'Query - {query}')
                 self.cursor.execute(query)
             self.conn.commit()
             result = self.cursor.fetchall()
@@ -96,9 +140,15 @@ class SQLiteHelper:
             return []
 
     def select_data(self, selection_items, selection_where=None):
-        """Select command for retrieving information from the database. selection_items is the column name.
-        selection_where is the optional where clause. Example: selection_where age > 10 will filter results to rows
-        where age is greater than 10
+        """
+        Select rows from the table.
+
+        Args:
+            selection_items (str): Comma-separated column names to return.
+            selection_where (str, optional): WHERE clause to filter results.
+
+        Returns:
+            list[dict] or str: List of matching rows, or message if no data/error.
         """
 
         query = f'SELECT {selection_items} FROM {self.db_name}'
@@ -106,7 +156,6 @@ class SQLiteHelper:
             query += f' WHERE {selection_where}'
         try:
             data = self.execute_query(query)
-            self.conn.commit()
             logging.info(data)
             if data:
                 return data
@@ -119,9 +168,16 @@ class SQLiteHelper:
             return f'Select failed, rolled back. Error: {e}'
 
     def insert_data(self, query_columns, query_values):
-        """Insert data into SQLite Database.
-        query_columns takes a tuple of the columns in the table where you want to insert data.
-        query_values takes a tuple of the values you would like to insert into the db."""
+        """
+        Insert a new row into the table.
+
+        Args:
+            query_columns (tuple): Column names for insertion.
+            query_values (tuple): Corresponding values to insert.
+
+        Returns:
+            str: Success or failure message.
+        """
 
         columns = ', '.join(query_columns)
 
@@ -148,7 +204,16 @@ class SQLiteHelper:
             return f'Insertion failed, rolled back. Error: {e}'
 
     def delete_data(self, column_name, value_to_delete):
-        """Used for deleting data from the table associated with the SQLite file."""
+        """
+        Delete rows matching a specific column value.
+
+        Args:
+            column_name (str): Column to match.
+            value_to_delete (any): Value that identifies rows to delete.
+
+        Returns:
+            str: Success or failure message.
+        """
 
         query = f"DELETE FROM {self.db_name} WHERE {column_name} = ?"
         try:
@@ -162,10 +227,16 @@ class SQLiteHelper:
             return f'Deletion failed, rolled back. Error: {e}'
 
     def update_data(self, update_data_dictionaries, where_clause):
-        """Update SQLite DB data. Takes a list of dictionaries.
-        key of the dictionary is the column that is being updated,
-        value is the value to update.
-        where_clause takes logic for the WHERE statement. Example: "age=0" for updating column values where age=0 """
+        """
+        Update rows in the table.
+
+        Args:
+            update_data_dictionaries (list[dict]): Each dictionary maps column names to updated values.
+            where_clause (str): WHERE condition to match rows for update.
+
+        Returns:
+            str: Success or failure message.
+        """
 
         merged_dict = {}
         for dictionary in update_data_dictionaries:
@@ -195,9 +266,16 @@ class SQLiteHelper:
             return f'Update failed, rolled back. Error: {e}'
 
     def select_min(self, column_name):
-        """Specialized Select command for retrieving information from the database. column_name is the column name.
-        This will return the minimum value of the rows based on the column name.
-         """
+        """
+        Get the minimum value of a column.
+
+        Args:
+            column_name (str): Column to evaluate.
+
+        Returns:
+            str: Minimum value or error message.
+        """
+
         query = f"SELECT MIN({column_name}) FROM {self.db_name}"
 
         try:
@@ -212,9 +290,15 @@ class SQLiteHelper:
             return f'Selection failed, rolled back. Error: {e}'
 
     def select_max(self, column_name):
-        """Specialized Select command for retrieving information from the database. column_name is the column name.
-        This will return the maximum value of the rows based on the column name.
-         """
+        """
+        Get the maximum value of a column.
+
+        Args:
+            column_name (str): Column to evaluate.
+
+        Returns:
+            str: Maximum value or error message.
+        """
 
         query = f"SELECT MAX({column_name}) FROM {self.db_name}"
         try:
@@ -229,9 +313,15 @@ class SQLiteHelper:
             return f'Selection failed, rolled back. Error: {e}'
 
     def select_avg(self, column_name):
-        """Specialized Select command for retrieving information from the database. column_name is the column name.\
-        This will return the average value of the rows based on the column name.
-         """
+        """
+        Get the average value of a column.
+
+        Args:
+            column_name (str): Column to evaluate.
+
+        Returns:
+            str: Average value or error message.
+        """
 
         query = f"SELECT AVG({column_name}) FROM {self.db_name}"
         try:
@@ -244,6 +334,26 @@ class SQLiteHelper:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
             return f'Selection failed, rolled back. Error: {e}'
+
+    def count(self, where_clause=None):
+        """
+        Count the number of rows in the table.
+
+        Args:
+            where_clause (str, optional): An optional SQL WHERE clause (without the 'WHERE' keyword)
+                to filter the rows being counted. For example: "age > 30".
+
+        Returns:
+            int: The number of rows matching the condition. If no condition is provided,
+                 returns the total number of rows in the table.
+        """
+
+        query = f"SELECT COUNT(*) as total FROM {self.db_name}"
+        if where_clause:
+            query += f" WHERE {where_clause}"
+        data = self.execute_query(query)
+        return data[0]['total'] if data else 0
+
 
 if __name__ == "__main__":
     ...
