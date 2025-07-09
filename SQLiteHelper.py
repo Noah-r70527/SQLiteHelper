@@ -121,13 +121,15 @@ class SQLiteHelper:
 
         try:
             if params is not None:
-                logging.info(f'Attempting to execute:'
+                if self.debug:
+                    logging.info(f'Attempting to execute:'
                              f'Query - {query}'
                              f'Params - {params}')
 
                 self.cursor.execute(query, params)
             else:
-                logging.info(f'Attempting to execute:'
+                if self.debug:
+                    logging.info(f'Attempting to execute:'
                              f'Query - {query}')
                 self.cursor.execute(query)
             self.conn.commit()
