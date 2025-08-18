@@ -43,7 +43,7 @@ def _parse_table_config(input_config):
     return return_list
 
 
-def __sanitize_identifier(identifier):
+def sanitize_identifier(identifier):
     """Helper function to assist with detecting SQL Injection."""
 
     if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', identifier):
@@ -75,7 +75,6 @@ class SQLiteHelper:
 
         __command_string__ = f"""CREATE TABLE IF NOT EXISTS {table_name} ("""
         primary_key_fields = []
-
 
         for line in table_layout:
             __command_string__ += f'{line[0]}, '
@@ -123,14 +122,13 @@ class SQLiteHelper:
             if params is not None:
                 if self.debug:
                     logging.info(f'Attempting to execute:'
-                             f'Query - {query}'
-                             f'Params - {params}')
+                                 f'Query - {query}'
+                                 f'Params - {params}')
 
                 self.cursor.execute(query, params)
             else:
                 if self.debug:
-                    logging.info(f'Attempting to execute:'
-                             f'Query - {query}')
+                    logging.info(f'Attempting to execute: \nQuery - {query}')
                 self.cursor.execute(query)
             self.conn.commit()
             result = self.cursor.fetchall()
@@ -170,7 +168,7 @@ class SQLiteHelper:
             logging.error(f'Select failed, rolled back. Error: {e}')
             return [], False
 
-    def insert_data(self, query_columns, query_values) -> tuple[str, bool]:
+    def insert_data(self, query_columns: tuple[str], query_values: tuple[str]) -> tuple[str, bool]:
         """
         Insert a new row into the table.
 
@@ -198,7 +196,6 @@ class SQLiteHelper:
 
         try:
             self.cursor.execute(query)
-            self.conn.commit()
             logging.info("Data inserted successfully.")
             return "Data inserted successfully.", True
 
@@ -222,7 +219,6 @@ class SQLiteHelper:
         query = f"DELETE FROM {self.db_name} WHERE {column_name} = ?"
         try:
             self.execute_query(query, (value_to_delete,))
-            self.conn.commit()
             logging.info("Data deleted successfully.")
             return "Data deleted successfully", True
 
@@ -261,7 +257,6 @@ class SQLiteHelper:
         query = f"UPDATE {self.db_name} SET {set_clause} WHERE {where_clause}"
         try:
             self.execute_query(query)
-            self.conn.commit()
             logging.info("Data updated successfully.")
             return "Data updated successfully.", True
 
@@ -285,7 +280,6 @@ class SQLiteHelper:
 
         try:
             data = self.execute_query(query)
-            self.conn.commit()
             logging.info(f"Minimum from {column_name}: {data}.")
             return f"Minimum from {column_name}: {data}.", True
 
@@ -308,7 +302,6 @@ class SQLiteHelper:
         query = f"SELECT MAX({column_name}) FROM {self.db_name}"
         try:
             data = self.execute_query(query)
-            self.conn.commit()
             logging.info(f"Maximum from {column_name}: {data}.")
             return f"Maximum from {column_name}: {data}.", True
 
@@ -331,7 +324,6 @@ class SQLiteHelper:
         query = f"SELECT AVG({column_name}) FROM {self.db_name}"
         try:
             data = self.execute_query(query)
-            self.conn.commit()
             logging.info(f"Average from {column_name}: {data}.")
             return f"Average from {column_name}: {data}.", True
 
