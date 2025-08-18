@@ -18,7 +18,7 @@ An asterisk (*) denotes the column is part of the primary key.
 """
 
 
-def load_config(filename, section):
+def _load_config(filename, section):
     """Load the configuration section from an INI file."""
 
     parser = ConfigParser()
@@ -35,7 +35,7 @@ def load_config(filename, section):
          raise Exception(f'Section {section} not found in the {filename} file')
 
 
-def parse_table_config(input_config):
+def _parse_table_config(input_config):
     """Parse the INI table structure into a list of (column_def, is_primary_key) tuples."""
     return_list = []
     for key, value in input_config.items():
@@ -43,7 +43,7 @@ def parse_table_config(input_config):
     return return_list
 
 
-def sanitize_identifier(identifier):
+def __sanitize_identifier(identifier):
     """Helper function to assist with detecting SQL Injection."""
 
     if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', identifier):
@@ -54,8 +54,8 @@ def sanitize_identifier(identifier):
 class SQLiteHelper:
 
     def __init__(self, db_file, db_name, enable_command_logging=False):
-        self.__config = load_config(db_file, db_name)
-        self.__config_list = parse_table_config(self.__config)
+        self.__config = _load_config(db_file, db_name)
+        self.__config_list = _parse_table_config(self.__config)
         self.__establish_db_conn(db_name)
         self.db_name = db_name
         self.debug = enable_command_logging
@@ -65,7 +65,7 @@ class SQLiteHelper:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        self.__close()
 
     def __create_table(self):
         """Create the database table if it does not already exist."""
@@ -102,12 +102,12 @@ class SQLiteHelper:
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
-    def close(self):
+    def __close(self):
         """Used to close connection to SQLite DB"""
         if self.conn:
             self.conn.close()
 
-    def execute_query(self, query, params=None):
+    def execute_query(self, query, params=None) -> tuple[list[dict], bool]:
         """
         Execute a SQL query with optional parameters.
 
@@ -134,26 +134,27 @@ class SQLiteHelper:
                 self.cursor.execute(query)
             self.conn.commit()
             result = self.cursor.fetchall()
-            return [dict(row) for row in result]
+            return [dict(row) for row in result], True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Exception occurred, rolled back any changes. Error: {e}')
-            return []
+            return [], False
 
-    def select_data(self, selection_items, selection_where=None):
+    def select_data(self, selection_items: tuple[str], selection_where=None) -> tuple[list[dict], bool]:
         """
         Select rows from the table.
 
         Args:
-            selection_items (str): Comma-separated column names to return.
+            selection_items (tuple): Tuple of strings for columns to search.
             selection_where (str, optional): WHERE clause to filter results.
 
         Returns:
-            list[dict] or str: List of matching rows, or message if no data/error.
+            tuple[list[dict], bool]: List of matching rows. Bool for if data search was successful.
         """
 
-        query = f'SELECT {selection_items} FROM {self.db_name}'
+        columns = ', '.join(selection_items)
+        query = f'SELECT {columns} FROM {self.db_name}'
         if selection_where:
             query += f' WHERE {selection_where}'
         try:
@@ -162,14 +163,14 @@ class SQLiteHelper:
             if data:
                 return data
             else:
-                return f'No data returned.'
+                return [], False
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Select failed, rolled back. Error: {e}')
-            return f'Select failed, rolled back. Error: {e}'
+            return [], False
 
-    def insert_data(self, query_columns, query_values):
+    def insert_data(self, query_columns, query_values) -> tuple[str, bool]:
         """
         Insert a new row into the table.
 
@@ -178,7 +179,7 @@ class SQLiteHelper:
             query_values (tuple): Corresponding values to insert.
 
         Returns:
-            str: Success or failure message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         columns = ', '.join(query_columns)
@@ -194,18 +195,19 @@ class SQLiteHelper:
 
         values = ', '.join(formatted_values)
         query = f'INSERT INTO {self.db_name} ({columns}) VALUES ({values})'
+
         try:
             self.cursor.execute(query)
             self.conn.commit()
             logging.info("Data inserted successfully.")
-            return "Data inserted successfully."
+            return "Data inserted successfully.", True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Insertion failed, rolled back. Error: {e}')
-            return f'Insertion failed, rolled back. Error: {e}'
+            return f'Insertion failed, rolled back. Error: {e}', False
 
-    def delete_data(self, column_name, value_to_delete):
+    def delete_data(self, column_name, value_to_delete) -> tuple[str, bool]:
         """
         Delete rows matching a specific column value.
 
@@ -214,7 +216,7 @@ class SQLiteHelper:
             value_to_delete (any): Value that identifies rows to delete.
 
         Returns:
-            str: Success or failure message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         query = f"DELETE FROM {self.db_name} WHERE {column_name} = ?"
@@ -222,13 +224,14 @@ class SQLiteHelper:
             self.execute_query(query, (value_to_delete,))
             self.conn.commit()
             logging.info("Data deleted successfully.")
-            return "Data deleted successfully"
+            return "Data deleted successfully", True
+
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Deletion failed, rolled back. Error: {e}')
-            return f'Deletion failed, rolled back. Error: {e}'
+            return f'Deletion failed, rolled back. Error: {e}', False
 
-    def update_data(self, update_data_dictionaries, where_clause):
+    def update_data(self, update_data_dictionaries: dict, where_clause: str) -> tuple[str, bool]:
         """
         Update rows in the table.
 
@@ -237,7 +240,7 @@ class SQLiteHelper:
             where_clause (str): WHERE condition to match rows for update.
 
         Returns:
-            str: Success or failure message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         merged_dict = {}
@@ -260,14 +263,14 @@ class SQLiteHelper:
             self.execute_query(query)
             self.conn.commit()
             logging.info("Data updated successfully.")
-            return "Data updated successfully."
+            return "Data updated successfully.", True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Update failed, rolled back. Error: {e}')
-            return f'Update failed, rolled back. Error: {e}'
+            return f'Update failed, rolled back. Error: {e}', False
 
-    def select_min(self, column_name):
+    def select_min(self, column_name: str) -> tuple[str, bool]:
         """
         Get the minimum value of a column.
 
@@ -275,7 +278,7 @@ class SQLiteHelper:
             column_name (str): Column to evaluate.
 
         Returns:
-            str: Minimum value or error message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         query = f"SELECT MIN({column_name}) FROM {self.db_name}"
@@ -284,14 +287,14 @@ class SQLiteHelper:
             data = self.execute_query(query)
             self.conn.commit()
             logging.info(f"Minimum from {column_name}: {data}.")
-            return f"Minimum from {column_name}: {data}."
+            return f"Minimum from {column_name}: {data}.", True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
-            return f'Selection failed, rolled back. Error: {e}'
+            return f'Selection failed, rolled back. Error: {e}', False
 
-    def select_max(self, column_name):
+    def select_max(self, column_name: str) -> tuple[str, bool]:
         """
         Get the maximum value of a column.
 
@@ -299,7 +302,7 @@ class SQLiteHelper:
             column_name (str): Column to evaluate.
 
         Returns:
-            str: Maximum value or error message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         query = f"SELECT MAX({column_name}) FROM {self.db_name}"
@@ -307,14 +310,14 @@ class SQLiteHelper:
             data = self.execute_query(query)
             self.conn.commit()
             logging.info(f"Maximum from {column_name}: {data}.")
-            return f"Maximum from {column_name}: {data}."
+            return f"Maximum from {column_name}: {data}.", True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
-            return f'Selection failed, rolled back. Error: {e}'
+            return f'Selection failed, rolled back. Error: {e}', False
 
-    def select_avg(self, column_name):
+    def select_avg(self, column_name: str):
         """
         Get the average value of a column.
 
@@ -322,7 +325,7 @@ class SQLiteHelper:
             column_name (str): Column to evaluate.
 
         Returns:
-            str: Average value or error message.
+            tuple[str, bool]: Success or failure message. Bool for success/failure
         """
 
         query = f"SELECT AVG({column_name}) FROM {self.db_name}"
@@ -330,14 +333,14 @@ class SQLiteHelper:
             data = self.execute_query(query)
             self.conn.commit()
             logging.info(f"Average from {column_name}: {data}.")
-            return f"Average from {column_name}: {data}."
+            return f"Average from {column_name}: {data}.", True
 
         except Exception as e:
             self.conn.rollback()
             logging.error(f'Selection failed, rolled back. Error: {e}')
-            return f'Selection failed, rolled back. Error: {e}'
+            return f'Selection failed, rolled back. Error: {e}', False
 
-    def count(self, where_clause=None):
+    def count(self, where_clause: str=None):
         """
         Count the number of rows in the table.
 
@@ -354,22 +357,4 @@ class SQLiteHelper:
         if where_clause:
             query += f" WHERE {where_clause}"
         data = self.execute_query(query)
-        return data[0]['total'] if data else 0
-
-
-if __name__ == "__main__":
-    ...
-    # Example instantiation of the SQLiteHelper class. Creates DB files/table if they don't exist
-    # table = SQLiteHelper('tableconfig.ini', 'testtable')
-
-    # Example of data insertion
-    # table.insert_data(query_columns=('name', 'age'), query_values=('tester', 3))
-
-    # Example of data deletion
-    # table.delete_data('age', '3')
-
-    # Example of updating data
-    # table.update_data([{'name':'testing'}], 'age=2')
-
-    # Example of selection data
-    # table.select_data('name, age')
+        return data[0][0]['total'] if data else 0
