@@ -107,7 +107,7 @@ class SQLiteHelper:
         if self.conn:
             self.conn.close()
 
-    def execute_query(self, query, params=None) -> tuple[list[dict], bool]:
+    def __execute_query(self, query, params=None) -> tuple[list[dict], bool]:
         """
         Execute a SQL query with optional parameters.
 
@@ -141,7 +141,7 @@ class SQLiteHelper:
             logging.error(f'Exception occurred, rolled back any changes. Error: {e}')
             return [], False
 
-    def select_data(self, selection_items: tuple[str], selection_where=None) -> tuple[list[dict], bool]:
+    def select_data(self, selection_items: tuple[str, ...], selection_where=None) -> tuple[list[dict], bool]:
         """
         Select rows from the table.
 
@@ -158,7 +158,7 @@ class SQLiteHelper:
         if selection_where:
             query += f' WHERE {selection_where}'
         try:
-            data = self.execute_query(query)
+            data = self.__execute_query(query)
             logging.info(data)
             if data:
                 return data
@@ -170,7 +170,7 @@ class SQLiteHelper:
             logging.error(f'Select failed, rolled back. Error: {e}')
             return [], False
 
-    def insert_data(self, query_columns, query_values) -> tuple[str, bool]:
+    def insert_data(self, query_columns: tuple[str, ...], query_values) -> tuple[str, bool]:
         """
         Insert a new row into the table.
 
@@ -197,8 +197,7 @@ class SQLiteHelper:
         query = f'INSERT INTO {self.db_name} ({columns}) VALUES ({values})'
 
         try:
-            self.cursor.execute(query)
-            self.conn.commit()
+            self.__execute_query(query=query)
             logging.info("Data inserted successfully.")
             return "Data inserted successfully.", True
 
@@ -207,7 +206,7 @@ class SQLiteHelper:
             logging.error(f'Insertion failed, rolled back. Error: {e}')
             return f'Insertion failed, rolled back. Error: {e}', False
 
-    def delete_data(self, column_name, value_to_delete) -> tuple[str, bool]:
+    def delete_data(self, column_name: str, value_to_delete) -> tuple[str, bool]:
         """
         Delete rows matching a specific column value.
 
@@ -221,8 +220,7 @@ class SQLiteHelper:
 
         query = f"DELETE FROM {self.db_name} WHERE {column_name} = ?"
         try:
-            self.execute_query(query, (value_to_delete,))
-            self.conn.commit()
+            self.__execute_query(query, (value_to_delete,))
             logging.info("Data deleted successfully.")
             return "Data deleted successfully", True
 
@@ -236,7 +234,7 @@ class SQLiteHelper:
         Update rows in the table.
 
         Args:
-            update_data_dictionaries (list[dict]): Each dictionary maps column names to updated values.
+            update_data_dictionaries (dict): Each dictionary maps column names to updated values.
             where_clause (str): WHERE condition to match rows for update.
 
         Returns:
@@ -260,8 +258,7 @@ class SQLiteHelper:
 
         query = f"UPDATE {self.db_name} SET {set_clause} WHERE {where_clause}"
         try:
-            self.execute_query(query)
-            self.conn.commit()
+            self.__execute_query(query)
             logging.info("Data updated successfully.")
             return "Data updated successfully.", True
 
@@ -284,8 +281,7 @@ class SQLiteHelper:
         query = f"SELECT MIN({column_name}) FROM {self.db_name}"
 
         try:
-            data = self.execute_query(query)
-            self.conn.commit()
+            data = self.__execute_query(query)
             logging.info(f"Minimum from {column_name}: {data}.")
             return f"Minimum from {column_name}: {data}.", True
 
@@ -307,8 +303,7 @@ class SQLiteHelper:
 
         query = f"SELECT MAX({column_name}) FROM {self.db_name}"
         try:
-            data = self.execute_query(query)
-            self.conn.commit()
+            data = self.__execute_query(query)
             logging.info(f"Maximum from {column_name}: {data}.")
             return f"Maximum from {column_name}: {data}.", True
 
@@ -330,8 +325,7 @@ class SQLiteHelper:
 
         query = f"SELECT AVG({column_name}) FROM {self.db_name}"
         try:
-            data = self.execute_query(query)
-            self.conn.commit()
+            data = self.__execute_query(query)
             logging.info(f"Average from {column_name}: {data}.")
             return f"Average from {column_name}: {data}.", True
 
@@ -356,5 +350,5 @@ class SQLiteHelper:
         query = f"SELECT COUNT(*) as total FROM {self.db_name}"
         if where_clause:
             query += f" WHERE {where_clause}"
-        data = self.execute_query(query)
+        data = self.__execute_query(query)
         return data[0][0]['total'] if data else 0
